@@ -1,0 +1,120 @@
+services:
+  # ─────────────────────────────────────────────────────────────
+  # MinIO: storage S3-compatível local. Substitui o S3/MinIO remoto
+  # que a demo original do curso usa.
+  # Console web: http://localhost:9001 (user/pass: minioadmin/minioadmin)
+  # ─────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: minio
+    ports:
+      - "9000:9000"   # API S3 (endpoint usado pelo Spark)
+      - "9001:9001"   # Console web
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────────────────────
+  # mc-init: cria os buckets uma vez e termina.
+  # Sem isso, você teria que criar buckets manualmente no console
+  # toda vez que subir o ambiente do zero.
+  # ─────────────────────────────────────────────────────────────
+  mc-init:
+    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
+    container_name: mc-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/raw-data &&
+      mc mb --ignore-existing local/lakehouse &&
+      echo 'Buckets prontos: raw-data, lakehouse' &&
+      exit 0
+      "
+
+  # ─────────────────────────────────────────────────────────────
+  # Spark Master
+  # ─────────────────────────────────────────────────────────────
+  spark-master:
+    image: bitnamilegacy/spark:3.5.4
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8080:8080"   # Master UI: http://localhost:8080
+      - "7077:7077"   # Master RPC (Spark internal)
+      - "4040:4040"   # Application UI (ativo enquanto job roda)
+    volumes:
+      - ./jobs:/opt/spark-apps/jobs
+      - ./lib:/opt/spark-apps/lib
+      - ./data:/opt/spark-apps/data
+      # Cache de JARs baixados via --packages. Sem isso, toda vez que
+      # você sobe o ambiente do zero, baixa Delta+Hadoop-AWS de novo.
+      # /tmp/.ivy2 porque o user do bitnami (1001) tem write em /tmp.
+      - spark-ivy-cache:/tmp/.ivy2
+
+  # ─────────────────────────────────────────────────────────────
+  # Spark Worker
+  # ─────────────────────────────────────────────────────────────
+  spark-worker1:
+    image: bitnamilegacy/spark:3.5.4
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8081:8081"   # Worker UI: http://localhost:8081
+    volumes:
+      - ./jobs:/opt/spark-apps/jobs
+      - ./lib:/opt/spark-apps/lib
+      - ./data:/opt/spark-apps/data
+      - spark-ivy-cache:/tmp/.ivy2
+
+  spark-worker2:
+    image: bitnamilegacy/spark:3.5.4
+    container_name: spark-worker2
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8082:8082"   # Worker UI: http://localhost:8082
+    volumes:
+      - ./jobs:/opt/spark-apps/jobs
+      - ./lib:/opt/spark-apps/lib
+      - ./data:/opt/spark-apps/data
+      - spark-ivy-cache:/tmp/.ivy2
+
+volumes:
+  minio-data:        # Persiste dados do MinIO entre restarts
+  spark-ivy-cache:   # Persiste JARs baixados (Delta, Hadoop-AWS, etc.)
+
