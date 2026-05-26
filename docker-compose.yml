@@ -1,4 +1,6 @@
 services:
+
+  
   # ─────────────────────────────────────────────────────────────
   # MinIO: storage S3-compatível local. Substitui o S3/MinIO remoto
   # que a demo original do curso usa.
@@ -59,20 +61,18 @@ services:
       - "7077:7077"   # Master RPC (Spark internal)
       - "4040:4040"   # Application UI (ativo enquanto job roda)
     volumes:
-      - ./jobs:/opt/spark-apps/jobs
-      - ./lib:/opt/spark-apps/lib
-      - ./data:/opt/spark-apps/data
-      # Cache de JARs baixados via --packages. Sem isso, toda vez que
-      # você sobe o ambiente do zero, baixa Delta+Hadoop-AWS de novo.
-      # /tmp/.ivy2 porque o user do bitnami (1001) tem write em /tmp.
+      - C:\Projetos\spark-lakehouse-lab\jobs:/opt/spark-apps/jobs
+      - C:\Projetos\spark-lakehouse-lab\lib:/opt/spark-apps/lib
+      - C:\Projetos\spark-lakehouse-lab\data:/opt/spark-apps/data
       - spark-ivy-cache:/tmp/.ivy2
+      - C:\Projetos\spark-lakehouse-lab\  spark-events:/tmp/spark-events
 
   # ─────────────────────────────────────────────────────────────
-  # Spark Worker
+  # Spark Workers
   # ─────────────────────────────────────────────────────────────
   spark-worker1:
     image: bitnamilegacy/spark:3.5.4
-    container_name: spark-worker
+    container_name: spark-worker1
     depends_on:
       - spark-master
     environment:
@@ -87,10 +87,11 @@ services:
     ports:
       - "8081:8081"   # Worker UI: http://localhost:8081
     volumes:
-      - ./jobs:/opt/spark-apps/jobs
-      - ./lib:/opt/spark-apps/lib
-      - ./data:/opt/spark-apps/data
+      - C:\Projetos\spark-lakehouse-lab\jobs:/opt/spark-apps/jobs
+      - C:\Projetos\spark-lakehouse-lab\lib:/opt/spark-apps/lib
+      - C:\Projetos\spark-lakehouse-lab\data:/opt/spark-apps/data
       - spark-ivy-cache:/tmp/.ivy2
+      - C:\Projetos\spark-lakehouse-lab\  spark-events:/tmp/spark-events
 
   spark-worker2:
     image: bitnamilegacy/spark:3.5.4
@@ -107,14 +108,32 @@ services:
       - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
       - SPARK_SSL_ENABLED=no
     ports:
-      - "8082:8082"   # Worker UI: http://localhost:8082
+      - "8082:8081"   # Worker UI: http://localhost:8082
     volumes:
-      - ./jobs:/opt/spark-apps/jobs
-      - ./lib:/opt/spark-apps/lib
-      - ./data:/opt/spark-apps/data
-      - spark-ivy-cache:/tmp/.ivy2
+      - C:\Projetos\spark-lakehouse-lab\jobs:/opt/spark-apps/jobs
+      - C:\Projetos\spark-lakehouse-lab\lib:/opt/spark-apps/lib
+      - C:\Projetos\spark-lakehouse-lab\data:/opt/spark-apps/data
+      - C:\Projetos\spark-lakehouse-lab\  spark-ivy-cache:/tmp/.ivy2
+      - C:\Projetos\spark-lakehouse-lab\  spark-events:/tmp/spark-events
 
+  # ─────────────────────────────────────────────────────────────
+  # Spark History Server
+  # ─────────────────────────────────────────────────────────────
+  spark-history-server:
+    image: bitnamilegacy/spark:3.5.4
+    container_name: spark-history-server
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=history-server
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_HISTORY_OPTS=-Dspark.history.fs.logDirectory=/tmp/spark-events
+    ports:
+      - "18080:18080"   # History Server UI: http://localhost:18080
+    volumes:
+      - C:\Projetos\spark-lakehouse-lab\  spark-events:/tmp/spark-events
+    command: bash -c "/opt/bitnami/spark/sbin/start-history-server.sh && tail -f /dev/null"
 volumes:
   minio-data:        # Persiste dados do MinIO entre restarts
-  spark-ivy-cache:   # Persiste JARs baixados (Delta, Hadoop-AWS, etc.)
-
+  spark-ivy-cache:
+  spark-events:   # Persiste eventos do Spark (logs, etc.)

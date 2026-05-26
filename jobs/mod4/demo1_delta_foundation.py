@@ -15,12 +15,7 @@ curso que vem com 1-4 comentadas). Descomente as outras conforme você
 for estudando — cada função é independente e pode rodar isolada.
 
 Como rodar:
-    docker exec -it spark-master /opt/bitnami/spark/bin/spark-submit \\
-      --master spark://spark-master:7077 \\
-      --packages io.delta:delta-spark_2.12:3.2.0,org.apache.hadoop:hadoop-aws:3.3.4 \\
-      --conf spark.driver.extraJavaOptions=-Divy.cache.dir=/tmp -Divy.home=/tmp \\
-      /opt/spark-apps/jobs/mod4/demo1_delta_foundation.py
-
+    docker exec -it spark-master /opt/bitnami/spark/bin/spark-submit --master spark://spark-master:7077 --packages io.delta:delta-spark_2.12:3.2.0,org.apache.hadoop:hadoop-aws:3.3.4 /opt/spark-apps/jobs/mod4/demo1_delta_foundation.py
 Atalho equivalente:
     make demo1
 """

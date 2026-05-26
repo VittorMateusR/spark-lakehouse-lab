@@ -78,6 +78,8 @@ def get_spark(app_name: str) -> SparkSession:
         # Kryo: serializer mais rápido que o default (Java).
         .config("spark.serializer",
                 "org.apache.spark.serializer.KryoSerializer")
+        # .config("spark.eventLog.enabled", "true")  # Habilita logs de eventos pra Spark UI funcionar
+        # .config("spark.eventLog.dir", "/tmp/spark-events")  # Diretório para logs de eventos
     )
 
     spark = builder.getOrCreate()
