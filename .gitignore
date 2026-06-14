@@ -1,4 +1,14 @@
+# Python
 __pycache__/
 *.pyc
+
+# Ambiente
 .env
 .vscode/
+.idea/
+
+# Artefatos de execução do Spark (não versionar)
+spark-events/*
+!spark-events/.gitkeep
+*.log
+demo*_output.log
