@@ -1,13 +1,16 @@
 # Spark Lakehouse Lab
 
-Ambiente local para estudar o **Módulo 4** do curso (Data Lakehouse / Delta Lake / Iceberg).
-Substitui o ambiente do curso original (que depende de MinIO remoto e dados externos)
-por uma stack autocontida que roda na sua máquina.
+Ambiente local e autocontido para estudar **Data Lakehouse / Delta Lake**,
+cobrindo os conceitos da certificação Databricks Data Engineer Associate.
+
+Substitui o ambiente do curso original (que depende de MinIO remoto e
+dados externos) por uma stack que roda inteira na sua máquina, sem
+dependências de rede além do download inicial dos JARs.
 
 ## Stack
 
-- **Spark 3.5.1** (master + 1 worker, modo Standalone)
-- **MinIO** como S3 local (substitui o S3/MinIO remoto da demo do curso)
+- **Spark 3.5.4** em modo Standalone (1 master + 2 workers + History Server)
+- **MinIO** como S3 local (substitui o S3/MinIO remoto da demo original)
 - **Delta Lake 3.2.0** carregado via `--packages` no `spark-submit`
 - **Hadoop AWS 3.3.4** para conectar Spark ao MinIO via `s3a://`
 
@@ -20,7 +23,7 @@ por uma stack autocontida que roda na sua máquina.
 ## Setup inicial (uma vez)
 
 ```bash
-# 1. Sobe Spark + MinIO
+# 1. Sobe Spark + MinIO + cria buckets
 make up
 
 # 2. Gera dados sintéticos UberEats e sobe pro bucket s3://raw-data/
@@ -29,19 +32,22 @@ make seed
 
 Pronto. A partir daqui, `make up` / `make down` controla o ambiente.
 
-### O que aparece
+### Serviços e UIs
 
 | Serviço | URL | Credenciais |
 |---|---|---|
 | Spark Master UI | http://localhost:8080 | — |
-| Spark Worker UI | http://localhost:8081 | — |
-| Spark App UI | http://localhost:4040 | (só ativa enquanto job roda) |
+| Spark Worker 1 UI | http://localhost:8081 | — |
+| Spark Worker 2 UI | http://localhost:8082 | — |
+| Spark App UI | http://localhost:4040 | (ativa só enquanto job roda) |
+| Spark History Server | http://localhost:18080 | (jobs já finalizados) |
 | MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
 
-## Rodando uma demo
+## Rodando as demos
 
 ```bash
-make demo1
+make demo1   # Fundamentos: criação, leitura, escrita, conversão Parquet→Delta
+make demo2   # Operações: time travel, MERGE/upsert, OPTIMIZE/ZORDER, VACUUM
 ```
 
 > **Primeira execução:** o `spark-submit` baixa Delta Lake + Hadoop-AWS
@@ -53,29 +59,37 @@ make demo1
 ```
 spark-lakehouse-lab/
 ├── docker-compose.yml          # Spark + MinIO + auto-criação de buckets
-├── Makefile                    # Atalhos: make up, make seed, make demo1
+├── Makefile                    # Atalhos: make up, make seed, make demo1, make demo2
 ├── README.md
 ├── data/
 │   └── generate_data.py        # Gera UberEats sintético, sobe pro MinIO
 ├── lib/
-│   └── spark_session.py        # Factory de SparkSession (Delta + S3A)
-└── jobs/
-    └── mod4/
-        └── demo1_delta_foundation.py
+│   └── spark_session.py        # Factory de SparkSession (Delta + S3A + event log)
+├── jobs/
+│   └── mod4/
+│       ├── demo1_delta_foundation.py    # Fundamentos do Delta
+│       └── demo2_delta_operations.py    # Operações avançadas
+└── spark-events/               # Event logs (alimentam o History Server)
 ```
 
-A estrutura `jobs/mod4/` deixa pronto para `mod5/`, `mod6/`, etc., quando
-chegarmos lá. **Por enquanto, só Módulo 4.**
+A estrutura `jobs/mod4/` deixa pronto para `mod5/`, `mod6/`, etc.,
+conforme o estudo avança.
 
-## Fluxo de estudo recomendado
+## O que cada demo cobre
 
-1. Assista a aula teórica
-2. Mande o resumo aqui no chat (protocolo pós-aula)
-3. Quando tiver demo correspondente, rode `make demo<N>` e observe:
-   - Logs do `spark-submit` no terminal
-   - MinIO Console (http://localhost:9001) para ver arquivos `_delta_log/` aparecendo
-   - Spark UI (http://localhost:4040) para ver o job sendo executado
-4. Mande o que observou aqui (protocolo pós-demo)
+### Demo 1 — Delta Foundation
+1. Criação de tabela via DataFrame API
+2. Criação de tabela via Spark SQL (CTAS)
+3. Read & write operations (overwrite, append, predicate pushdown)
+4. Conversão Parquet → Delta in-place (`CONVERT TO DELTA`)
+5. Exploração de metadados (`history()`, `DESCRIBE DETAIL`)
+
+### Demo 2 — Delta Operations
+1. **Time travel** — `VERSION AS OF` e `TIMESTAMP AS OF`
+2. **MERGE / upsert** — insert + update atômico (base de pipelines incrementais)
+3. **DELETE & UPDATE** — mutações com predicado, impossíveis em Parquet puro
+4. **OPTIMIZE + ZORDER** — compactação de small files e data skipping
+5. **VACUUM** — limpeza de arquivos órfãos e o trade-off com time travel
 
 ## Buckets
 
@@ -99,11 +113,11 @@ make nuke            # apaga TUDO (containers, volumes, dados)
 
 | | Curso original | Este lab |
 |---|---|---|
-| Storage | MinIO remoto (`24.144.65.249`) | MinIO local |
-| Dados | `owshq-shadow-traffic-uber-eats` (externo) | Gerados por `make seed` |
-| Buckets | `owshq-uber-eats-lakehouse` | `lakehouse` |
-| Spark | Cluster compartilhado | Cluster local controlado por você |
-| Delta version | 2.4.0 | 3.2.0 (mais recente, compatível com Spark 3.5.1) |
+| Storage | MinIO remoto | MinIO local |
+| Dados | Dataset externo | Gerados por `make seed` |
+| Buckets | nomes do curso | `raw-data`, `lakehouse` |
+| Spark | Cluster compartilhado | Cluster local (1 master + 2 workers) |
+| Delta version | 2.4.0 | 3.2.0 (compatível com Spark 3.5.x) |
 
-**Os conceitos são idênticos.** Code paths, comandos SQL, comportamento
-do `_delta_log/` — tudo igual ao Databricks.
+Os conceitos são idênticos: code paths, comandos SQL e comportamento
+do `_delta_log/` espelham o que roda no Databricks.
